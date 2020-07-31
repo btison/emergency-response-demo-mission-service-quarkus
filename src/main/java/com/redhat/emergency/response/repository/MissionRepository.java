@@ -105,6 +105,20 @@ public class MissionRepository {
                 .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
 
+    public Uni<List<Mission>> getByIncidentId(String incidentId) {
+
+        return Uni.createFrom().item(() -> getCache().keySet().stream().map(key -> {
+            Mission mission = null;
+            try {
+                mission = Json.decodeValue(getCache().get(key), Mission.class);
+            } catch (DecodeException e) {
+                log.error("Exception decoding mission with id = " + key, e);
+            }
+            return mission;
+        }).filter(Objects::nonNull).filter(m -> m.getIncidentId().equals(incidentId)).collect(Collectors.toList()))
+                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
+    }
+
     private RemoteCache<String, String> getCache() {
         RemoteCache<String, String> cache = missionCache;
         if (cache == null) {

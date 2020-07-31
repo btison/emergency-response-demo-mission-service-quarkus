@@ -37,4 +37,13 @@ public class RestApi {
                         .end(Json.encode(m)), () -> ex.response().setStatusCode(204).end())), () -> ex.response().setStatusCode(204).end());
     }
 
+    @Route(path = "/api/missions/incident/:id", methods = HttpMethod.GET, produces = "application/json")
+    void missionByIncident(RoutingExchange ex) {
+
+        ex.getParam("id").ifPresentOrElse(incidentId -> repository.getByIncidentId(incidentId)
+                .onItem().apply(list -> list.stream().findFirst())
+                .subscribe().with(o -> o.ifPresentOrElse(m -> ex.response().putHeader("Content-Type", "application/json").setStatusCode(200)
+                        .end(Json.encode(m)), () -> ex.response().setStatusCode(404).end())), () -> ex.response().setStatusCode(400).end());
+    }
+
 }

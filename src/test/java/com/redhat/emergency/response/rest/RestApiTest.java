@@ -149,4 +149,38 @@ public class RestApiTest {
 
         verify(repository).getByResponderId("64");
     }
+
+    @Test
+    void missionByIncident() {
+
+        String m1 = "{\"id\":\"f5a9bc5e-408c-4f86-8592-6f67bb73c5fd\",\"incidentId\":\"incident123\"," +
+                "\"responderId\":\"64\",\"responderStartLat\":\"40.12345\",\"responderStartLong\":\"-80.98765\"," +
+                "\"incidentLat\":\"30.12345\",\"incidentLong\":\"-70.98765\"," +
+                "\"destinationLat\":\"50.12345\",\"destinationLong\":\"-90.98765\"," +
+                "\"responderLocationHistory\":[{\"lat\":30.78452,\"lon\":-70.85252,\"timestamp\":1593872667576}]," +
+                "\"steps\":[],\"status\":\"COMPLETED\"}";
+        Mission mission1 = Json.decodeValue(m1, Mission.class);
+
+        when(repository.getByIncidentId("incident123")).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(Collections.singletonList(mission1))));
+
+        RestAssured.given().header(new Header("Accept", "application/json")).get("/api/missions/incident/incident123").then()
+                .assertThat()
+                .statusCode(200)
+                .contentType("application/json")
+                .body("id", equalTo("f5a9bc5e-408c-4f86-8592-6f67bb73c5fd"));
+
+        verify(repository).getByIncidentId("incident123");
+    }
+
+    @Test
+    void missionByIncidentNoMission() {
+
+        when(repository.getByIncidentId("incident123")).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(Collections.emptyList())));
+
+        RestAssured.given().header(new Header("Accept", "application/json")).get("/api/missions/incident/incident123").then()
+                .assertThat()
+                .statusCode(404);
+
+        verify(repository).getByIncidentId("incident123");
+    }
 }

@@ -235,6 +235,44 @@ public class MissionRepositoryTest {
         verify(missionCache).get("incident456:responder456");
     }
 
+    @Test
+    void testGetByIncidentId() {
+        JsonObject json1 = new JsonObject().put("incidentId", "incident123")
+                .put("incidentLat", new BigDecimal("30.12345").doubleValue()).put("incidentLong", new BigDecimal("-70.98765").doubleValue())
+                .put("responderId", "responder123")
+                .put("responderStartLat", new BigDecimal("31.12345").doubleValue()).put("responderStartLong", new BigDecimal("-71.98765").doubleValue())
+                .put("destinationLat", new BigDecimal("32.12345").doubleValue()).put("destinationLong", new BigDecimal("-72.98765").doubleValue())
+                .put("status", "CREATED")
+                .put("responderLocationHistory", new JsonArray().add(new JsonObject().put("lat", new BigDecimal("30.98765").doubleValue())
+                        .put("lon", new BigDecimal("-70.12345").doubleValue()).put("timestamp", 12345L)))
+                .put("steps", new JsonArray().add(new JsonObject().put("lat", new BigDecimal("30.98765").doubleValue())
+                        .put("lon", new BigDecimal("-70.12345").doubleValue()).put("wayPoint", false).put("destination", false)));
+
+        JsonObject json2 = new JsonObject().put("incidentId", "incident456")
+                .put("incidentLat", new BigDecimal("30.12345").doubleValue()).put("incidentLong", new BigDecimal("-70.98765").doubleValue())
+                .put("responderId", "responder456")
+                .put("responderStartLat", new BigDecimal("31.12345").doubleValue()).put("responderStartLong", new BigDecimal("-71.98765").doubleValue())
+                .put("destinationLat", new BigDecimal("32.12345").doubleValue()).put("destinationLong", new BigDecimal("-72.98765").doubleValue())
+                .put("status", "CREATED")
+                .put("responderLocationHistory", new JsonArray().add(new JsonObject().put("lat", new BigDecimal("30.98765").doubleValue())
+                        .put("lon", new BigDecimal("-70.12345").doubleValue()).put("timestamp", 12345L)))
+                .put("steps", new JsonArray().add(new JsonObject().put("lat", new BigDecimal("30.98765").doubleValue())
+                        .put("lon", new BigDecimal("-70.12345").doubleValue()).put("wayPoint", false).put("destination", false)));
+
+        when(missionCache.keySet()).thenReturn(new CloseableIteratorSetAdapter<>(new HashSet<>(Arrays.asList("incident123:responder123", "incident456:responder456"))));
+        when(missionCache.get("incident123:responder123")).thenReturn(json1.toString());
+        when(missionCache.get("incident456:responder456")).thenReturn(json2.toString());
+
+        List<Mission> missions =  repository.getByIncidentId("incident456").await().indefinitely();
+
+        assertThat(missions, notNullValue());
+        assertThat(missions.size(), equalTo(1));
+        assertThat(missions.get(0).getIncidentId(), equalTo("incident456"));
+        verify(missionCache).keySet();
+        verify(missionCache).get("incident123:responder123");
+        verify(missionCache).get("incident456:responder456");
+    }
+
     private void setField(Object targetObject, String name, Object value) {
 
         Class<?> targetClass = targetObject.getClass();
