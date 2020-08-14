@@ -2,15 +2,16 @@ package com.redhat.emergency.response.source;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.MockitoAnnotations.initMocks;
+import static org.mockito.MockitoAnnotations.openMocks;
 
 import java.math.BigDecimal;
 import java.util.Optional;
-import java.util.concurrent.CompletionStage;
+import javax.enterprise.inject.Any;
 import javax.inject.Inject;
 
 import com.redhat.emergency.response.model.Mission;
@@ -20,26 +21,15 @@ import com.redhat.emergency.response.sink.EventSink;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.mockito.InjectMock;
 import io.smallrye.mutiny.Uni;
-import io.smallrye.reactive.messaging.kafka.IncomingKafkaRecord;
-import io.vertx.core.AsyncResult;
-import io.vertx.core.Handler;
-import io.vertx.core.Promise;
+import io.smallrye.reactive.messaging.connectors.InMemoryConnector;
+import io.smallrye.reactive.messaging.connectors.InMemorySource;
 import io.vertx.core.json.Json;
-import io.vertx.kafka.client.consumer.KafkaReadStream;
-import io.vertx.kafka.client.consumer.impl.KafkaConsumerImpl;
-import io.vertx.kafka.client.consumer.impl.KafkaConsumerRecordImpl;
-import io.vertx.kafka.client.consumer.impl.KafkaReadStreamImpl;
-import io.vertx.mutiny.kafka.client.consumer.KafkaConsumer;
-import io.vertx.mutiny.kafka.client.consumer.KafkaConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.eclipse.microprofile.reactive.messaging.Message;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 @QuarkusTest
 public class ResponderUpdateLocationSourceTest {
-
-    @Inject
-    ResponderUpdateLocationSource source;
 
     @InjectMock
     MissionRepository repository;
@@ -47,12 +37,15 @@ public class ResponderUpdateLocationSourceTest {
     @InjectMock
     EventSink eventSink;
 
-    private boolean messageAck = false;
+    @Inject @Any
+    InMemoryConnector connector;
+
+    InMemorySource<Message<String>> source;
 
     @BeforeEach
     void init() {
-        initMocks(this);
-        messageAck = false;
+        openMocks(this);
+        source = connector.source("responder-location-update");
     }
 
     @Test
@@ -75,15 +68,16 @@ public class ResponderUpdateLocationSourceTest {
                 "\"destinationLat\":\"50.12345\",\"destinationLong\":\"-90.98765\"," +
                 "\"responderLocationHistory\":[{\"lat\":30.78452,\"lon\":-70.85252,\"timestamp\":1593872667576}]," +
                 "\"steps\":[],\"status\":\"CREATED\"}";
+
         Mission mission = Json.decodeValue(m, Mission.class);
 
         when(repository.get("5d9b2d3a-136f-414f-96ba-1b2a445fee5d:64")).thenReturn(Optional.of(mission));
         when(repository.add(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
 
-        Uni<CompletionStage<Void>> uni = source.process(toRecord("incident12364", payload));
-        uni.await().indefinitely();
+        MessageWithAck<String> message = MessageWithAck.of(payload);
+        source.send(message);
 
-        assertThat(messageAck, equalTo(true));
+        assertThat(message.acked(), is(true));
         assertThat(mission.getResponderLocationHistory().size(), equalTo(2));
         ResponderLocationHistory rlh = mission.getResponderLocationHistory().get(1);
         assertThat(rlh.getLat(), equalTo(new BigDecimal("34.1701")));
@@ -121,10 +115,10 @@ public class ResponderUpdateLocationSourceTest {
         when(repository.add(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
         when(eventSink.missionPickedUp(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
 
-        Uni<CompletionStage<Void>> uni = source.process(toRecord("incident12364", payload));
-        uni.await().indefinitely();
+        MessageWithAck<String> message = MessageWithAck.of(payload);
+        source.send(message);
 
-        assertThat(messageAck, equalTo(true));
+        assertThat(message.acked(), is(true));
         assertThat(mission.getResponderLocationHistory().size(), equalTo(2));
         ResponderLocationHistory rlh = mission.getResponderLocationHistory().get(1);
         assertThat(rlh.getLat(), equalTo(new BigDecimal("34.1701")));
@@ -164,10 +158,10 @@ public class ResponderUpdateLocationSourceTest {
         when(eventSink.responderCommand(any(Mission.class), any(BigDecimal.class), any(BigDecimal.class), any(Boolean.class)))
                 .thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
 
-        Uni<CompletionStage<Void>> uni = source.process(toRecord("incident12364", payload));
-        uni.await().indefinitely();
+        MessageWithAck<String> message = MessageWithAck.of(payload);
+        source.send(message);
 
-        assertThat(messageAck, equalTo(true));
+        assertThat(message.acked(), is(true));
         assertThat(mission.getResponderLocationHistory().size(), equalTo(2));
         ResponderLocationHistory rlh = mission.getResponderLocationHistory().get(1);
         assertThat(rlh.getLat(), equalTo(new BigDecimal("34.1701")));
@@ -192,43 +186,14 @@ public class ResponderUpdateLocationSourceTest {
                 "  \"continue\": true\n" +
                 "}";
 
-        Uni<CompletionStage<Void>> uni = source.process(toRecord("incident12364", payload));
-        uni.await().indefinitely();
+        MessageWithAck<String> message = MessageWithAck.of(payload);
+        source.send(message);
 
-        assertThat(messageAck, equalTo(true));
+        assertThat(message.acked(), is(true));
         verify(repository, never()).get(any(String.class));
         verify(eventSink, never()).missionPickedUp(any());
         verify(eventSink, never()).missionCompleted(any());
         verify(repository, never()).add(any());
-    }
-
-    private IncomingKafkaRecord<String, String> toRecord(String key, String payload) {
-
-        ResponderUpdateLocationSourceTest.MockKafkaConsumer<String, String> mc = new ResponderUpdateLocationSourceTest.MockKafkaConsumer<>();
-        KafkaConsumer<String, String> c = new KafkaConsumer<>(mc);
-        ConsumerRecord<String, String> cr = new ConsumerRecord<>("topic", 1, 100, key, payload);
-        KafkaConsumerRecord<String, String> kcr = new KafkaConsumerRecord<>(new KafkaConsumerRecordImpl<>(cr));
-        return new IncomingKafkaRecord<>(c, kcr);
-    }
-
-    private class MockKafkaConsumer<K, V> extends KafkaConsumerImpl<K, V> {
-
-        public MockKafkaConsumer() {
-            super(new KafkaReadStreamImpl<K, V>(null, null));
-        }
-
-        public MockKafkaConsumer(KafkaReadStream<K, V> stream) {
-            super(stream);
-        }
-
-        @Override
-        public void commit(Handler<AsyncResult<Void>> completionHandler) {
-            ResponderUpdateLocationSourceTest.this.messageAck = true;
-
-            Promise<Void> future = Promise.promise();
-            future.future().onComplete(completionHandler);
-            future.complete(null);
-        }
     }
 
 }

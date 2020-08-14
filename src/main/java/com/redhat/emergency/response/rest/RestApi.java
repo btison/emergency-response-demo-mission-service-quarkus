@@ -30,9 +30,8 @@ public class RestApi {
     @Route(path = "/api/missions/responders/:id", methods = HttpMethod.GET, produces = "application/json")
     void missionByResponder(RoutingExchange ex) {
 
-        ex.getParam("id").ifPresentOrElse(responderId -> repository.getByResponderId(responderId).onItem()
-                .apply(l -> l.stream()
-                        .filter(m -> m.getStatus().equalsIgnoreCase("UPDATED") || (m.getStatus().equalsIgnoreCase("CREATED"))).findFirst())
+        ex.getParam("id").ifPresentOrElse(responderId -> repository.getByResponderId(responderId).onItem().transform(l -> l.stream()
+                .filter(m -> m.getStatus().equalsIgnoreCase("UPDATED") || (m.getStatus().equalsIgnoreCase("CREATED"))).findFirst())
                 .subscribe().with(o -> o.ifPresentOrElse(m -> ex.response().putHeader("Content-Type", "application/json").setStatusCode(200)
                         .end(Json.encode(m)), () -> ex.response().setStatusCode(204).end())), () -> ex.response().setStatusCode(204).end());
     }
@@ -41,7 +40,7 @@ public class RestApi {
     void missionByIncident(RoutingExchange ex) {
 
         ex.getParam("id").ifPresentOrElse(incidentId -> repository.getByIncidentId(incidentId)
-                .onItem().apply(list -> list.stream().findFirst())
+                .onItem().transform(list -> list.stream().findFirst())
                 .subscribe().with(o -> o.ifPresentOrElse(m -> ex.response().putHeader("Content-Type", "application/json").setStatusCode(200)
                         .end(Json.encode(m)), () -> ex.response().setStatusCode(404).end())), () -> ex.response().setStatusCode(400).end());
     }

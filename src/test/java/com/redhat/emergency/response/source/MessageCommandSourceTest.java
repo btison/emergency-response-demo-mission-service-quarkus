@@ -2,17 +2,18 @@ package com.redhat.emergency.response.source;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.MockitoAnnotations.initMocks;
+import static org.mockito.MockitoAnnotations.openMocks;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
-import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutionException;
+import javax.enterprise.inject.Any;
 import javax.inject.Inject;
 
 import com.redhat.emergency.response.map.RoutePlanner;
@@ -25,17 +26,9 @@ import com.redhat.emergency.response.sink.EventSink;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.mockito.InjectMock;
 import io.smallrye.mutiny.Uni;
-import io.smallrye.reactive.messaging.kafka.IncomingKafkaRecord;
-import io.vertx.core.AsyncResult;
-import io.vertx.core.Handler;
-import io.vertx.core.Promise;
-import io.vertx.kafka.client.consumer.KafkaReadStream;
-import io.vertx.kafka.client.consumer.impl.KafkaConsumerImpl;
-import io.vertx.kafka.client.consumer.impl.KafkaConsumerRecordImpl;
-import io.vertx.kafka.client.consumer.impl.KafkaReadStreamImpl;
-import io.vertx.mutiny.kafka.client.consumer.KafkaConsumer;
-import io.vertx.mutiny.kafka.client.consumer.KafkaConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
+import io.smallrye.reactive.messaging.connectors.InMemoryConnector;
+import io.smallrye.reactive.messaging.connectors.InMemorySource;
+import org.eclipse.microprofile.reactive.messaging.Message;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -43,9 +36,6 @@ import org.mockito.Captor;
 
 @QuarkusTest
 public class MessageCommandSourceTest {
-
-    @Inject
-    MissionCommandSource missionCommandSource;
 
     @InjectMock
     RoutePlanner routePlanner;
@@ -56,18 +46,21 @@ public class MessageCommandSourceTest {
     @InjectMock
     EventSink eventSink;
 
+    @Inject @Any
+    InMemoryConnector connector;
+
     @Captor
     ArgumentCaptor<Mission> missionCaptor;
 
     @Captor
     ArgumentCaptor<Location> locationCaptor;
 
-    private boolean messageAck = false;
+    InMemorySource<Message<String>> source;
 
     @BeforeEach
     void init() {
-        initMocks(this);
-        messageAck = false;
+        openMocks(this);
+        source = connector.source("mission-command");
     }
 
     @Test
@@ -87,10 +80,10 @@ public class MessageCommandSourceTest {
         when(repository.add(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
         when(eventSink.missionStarted(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
 
-        Uni<CompletionStage<Void>> uni = missionCommandSource.process(toRecord("incident123", payload));
-        uni.await().indefinitely();
+        MessageWithAck<String> message = MessageWithAck.of(payload);
+        source.send(message);
 
-        assertThat(messageAck, equalTo(true));
+        assertThat(message.acked(), is(true));
         verify(repository).add(missionCaptor.capture());
         Mission mission = missionCaptor.getValue();
         assertThat(mission, notNullValue());
@@ -141,10 +134,10 @@ public class MessageCommandSourceTest {
                 + "\"responderStartLong\":\"-80.98765\",\"incidentLat\":\"30.12345\",\"incidentLong\":\"-70.98765\","
                 + "\"destinationLat\":\"50.12345\",\"destinationLong\":\"-90.98765\",\"processId\":\"0\"}}";
 
-        Uni<CompletionStage<Void>> uni = missionCommandSource.process(toRecord("incident123", payload));
-        uni.await().indefinitely();
+        MessageWithAck<String> message = MessageWithAck.of(payload);
+        source.send(message);
 
-        assertThat(messageAck, equalTo(true));
+        assertThat(message.acked(), is(true));
         verify(repository, never()).add(any(Mission.class));
         verify(routePlanner, never()).getDirections(any(Location.class), any(Location.class), any(Location.class));
         verify(eventSink, never()).missionStarted(any(Mission.class));
@@ -159,41 +152,12 @@ public class MessageCommandSourceTest {
                 + "\"incidentLat\":\"30.12345\",\"incidentLong\":\"-70.98765\","
                 + "\"destinationLat\":\"50.12345\",\"destinationLong\":\"-90.98765\",\"processId\":\"0\"}}";
 
-        Uni<CompletionStage<Void>> uni = missionCommandSource.process(toRecord("incident123", payload));
-        uni.await().indefinitely();
+        MessageWithAck<String> message = MessageWithAck.of(payload);
+        source.send(message);
 
-        assertThat(messageAck, equalTo(true));
+        assertThat(message.acked(), is(true));
         verify(repository, never()).add(any(Mission.class));
         verify(routePlanner, never()).getDirections(any(Location.class), any(Location.class), any(Location.class));
         verify(eventSink, never()).missionStarted(any(Mission.class));
-    }
-
-    private IncomingKafkaRecord<String, String> toRecord(String key, String payload) {
-
-        MockKafkaConsumer<String, String> mc = new MockKafkaConsumer<>();
-        KafkaConsumer<String, String> c = new KafkaConsumer<>(mc);
-        ConsumerRecord<String, String> cr = new ConsumerRecord<>("topic", 1, 100, key, payload);
-        KafkaConsumerRecord<String, String> kcr = new KafkaConsumerRecord<>(new KafkaConsumerRecordImpl<>(cr));
-        return new IncomingKafkaRecord<String, String>(c, kcr);
-    }
-
-    private class MockKafkaConsumer<K, V> extends KafkaConsumerImpl<K, V> {
-
-        public MockKafkaConsumer() {
-            super(new KafkaReadStreamImpl<K, V>(null, null));
-        }
-
-        public MockKafkaConsumer(KafkaReadStream<K, V> stream) {
-            super(stream);
-        }
-
-        @Override
-        public void commit(Handler<AsyncResult<Void>> completionHandler) {
-            MessageCommandSourceTest.this.messageAck = true;
-
-            Promise<Void> future = Promise.promise();
-            future.future().onComplete(completionHandler);
-            future.complete(null);
-        }
     }
 }

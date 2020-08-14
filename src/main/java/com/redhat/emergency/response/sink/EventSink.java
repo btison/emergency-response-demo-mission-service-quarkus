@@ -62,7 +62,7 @@ public class EventSink {
 
     @Outgoing("mission-event")
     public Multi<Message<String>> missionEvent() {
-        return missionProcessor.onItem().apply(p -> {
+        return missionProcessor.onItem().transform(p -> {
             log.debug("Sending message to mission-event channel. Key: " + p.getLeft() + " - Message = " + p.getRight().encode());
             return toMessage(p);
         });
@@ -70,7 +70,7 @@ public class EventSink {
 
     @Outgoing("responder-command")
     public Multi<Message<String>> responderCommand() {
-        return responderProcessor.onItem().apply(p -> {
+        return responderProcessor.onItem().transform(p -> {
             log.debug("Sending message to responder-command channel. Key: " + p.getLeft() + " - Message = " + p.getRight().encode());
             return toMessage(p);
         });

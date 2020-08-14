@@ -37,9 +37,9 @@ public class ResponderUpdateLocationSource {
     public Uni<CompletionStage<Void>> process(Message<String> responderLocationUpdate) {
 
         return Uni.createFrom().item(responderLocationUpdate).onItem()
-                .apply(m -> getLocationUpdate(responderLocationUpdate.getPayload()))
-                .onItem().ifNotNull().produceUni(this::processLocationUpdate)
-                .onItem().apply(v -> responderLocationUpdate.ack());
+                .transform(m -> getLocationUpdate(responderLocationUpdate.getPayload()))
+                .onItem().ifNotNull().transformToUni(this::processLocationUpdate)
+                .onItem().transform(v -> responderLocationUpdate.ack());
     }
 
     private Uni<Void> processLocationUpdate(JsonObject locationUpdate) {
@@ -49,8 +49,8 @@ public class ResponderUpdateLocationSource {
                     BigDecimal.valueOf(locationUpdate.getDouble("lon")), Instant.now().toEpochMilli());
             mission.get().getResponderLocationHistory().add(rlh);
             return emitMissionEvent(locationUpdate.getString("status"), mission.get())
-                    .onItem().produceUni(m -> emitUpdateResponderCommand(m, locationUpdate))
-                    .onItem().produceUni(m -> repository.add(m));
+                    .onItem().transformToUni(m -> emitUpdateResponderCommand(m, locationUpdate))
+                    .onItem().transformToUni(m -> repository.add(m));
         } else {
             log.warn("Mission with key = " + getKey(locationUpdate) + " not found in the repository.");
         }
