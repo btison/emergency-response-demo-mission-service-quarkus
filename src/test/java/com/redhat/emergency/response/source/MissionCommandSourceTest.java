@@ -35,7 +35,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 
 @QuarkusTest
-public class MessageCommandSourceTest {
+public class MissionCommandSourceTest {
 
     @InjectMock
     RoutePlanner routePlanner;
