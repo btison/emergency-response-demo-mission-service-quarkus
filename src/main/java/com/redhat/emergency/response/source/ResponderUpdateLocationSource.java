@@ -13,7 +13,11 @@ import com.redhat.emergency.response.model.ResponderLocationHistory;
 import com.redhat.emergency.response.model.ResponderLocationStatus;
 import com.redhat.emergency.response.repository.MissionRepository;
 import com.redhat.emergency.response.sink.EventSink;
+import com.redhat.emergency.response.tracing.TracingKafkaUtils;
+import io.opentracing.Span;
+import io.opentracing.Tracer;
 import io.smallrye.mutiny.Uni;
+import io.smallrye.reactive.messaging.kafka.IncomingKafkaRecord;
 import io.vertx.core.json.JsonObject;
 import org.eclipse.microprofile.reactive.messaging.Acknowledgment;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
@@ -30,19 +34,30 @@ public class ResponderUpdateLocationSource {
     @Inject
     EventSink eventSink;
 
+    @Inject
+    Tracer tracer;
+
     private static final Logger log = LoggerFactory.getLogger(ResponderUpdateLocationSource.class);
 
     @Incoming("responder-location-update")
     @Acknowledgment(Acknowledgment.Strategy.MANUAL)
     public Uni<CompletionStage<Void>> process(Message<String> responderLocationUpdate) {
 
+        Span span = TracingKafkaUtils.buildChildSpan("responderUpdateLocation", (IncomingKafkaRecord<String, String>)responderLocationUpdate, tracer);
         return Uni.createFrom().item(responderLocationUpdate).onItem()
                 .transform(m -> getLocationUpdate(responderLocationUpdate.getPayload()))
                 .onItem().ifNotNull().transformToUni(this::processLocationUpdate)
-                .onItem().transform(v -> responderLocationUpdate.ack());
+                .onItem().transform(v -> {
+                    span.finish();
+                    return responderLocationUpdate.ack();
+                });
     }
 
     private Uni<Void> processLocationUpdate(JsonObject locationUpdate) {
+        if (tracer.activeSpan() != null) {
+            tracer.activeSpan().setTag("status", locationUpdate.getString("status"));
+
+        }
         Optional<Mission> mission = repository.get(getKey(locationUpdate));
         if (mission.isPresent()) {
             ResponderLocationHistory rlh = new ResponderLocationHistory(BigDecimal.valueOf(locationUpdate.getDouble("lat")),
@@ -52,7 +67,11 @@ public class ResponderUpdateLocationSource {
                     .onItem().transformToUni(m -> emitUpdateResponderCommand(m, locationUpdate))
                     .onItem().transformToUni(m -> repository.add(m));
         } else {
-            log.warn("Mission with key = " + getKey(locationUpdate) + " not found in the repository.");
+            String stmt = "Mission with key = " + getKey(locationUpdate) + " not found in the repository.";
+            log.warn(stmt);
+            if (tracer.activeSpan() != null) {
+                tracer.activeSpan().setTag("error", "true").log(stmt);
+            }
         }
         return Uni.createFrom().item(null);
     }

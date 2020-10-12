@@ -19,6 +19,7 @@ import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
 import com.redhat.emergency.response.model.Location;
 import com.redhat.emergency.response.model.MissionStep;
+import io.opentracing.noop.NoopTracerFactory;
 import io.smallrye.mutiny.Uni;
 import org.apache.commons.io.IOUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -38,6 +39,7 @@ public class RoutePlannerTest {
         routePlanner = new RoutePlanner();
         setField(routePlanner, "mapboxUrl", "http://localhost:" + mockServer.port());
         setField(routePlanner, "accessToken", "pk.replaceme");
+        setField(routePlanner, "tracer", NoopTracerFactory.create());
     }
 
     @AfterEach

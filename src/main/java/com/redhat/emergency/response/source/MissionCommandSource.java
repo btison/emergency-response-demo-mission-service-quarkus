@@ -11,7 +11,11 @@ import com.redhat.emergency.response.model.Mission;
 import com.redhat.emergency.response.model.MissionStatus;
 import com.redhat.emergency.response.repository.MissionRepository;
 import com.redhat.emergency.response.sink.EventSink;
+import com.redhat.emergency.response.tracing.TracingKafkaUtils;
+import io.opentracing.Span;
+import io.opentracing.Tracer;
 import io.smallrye.mutiny.Uni;
+import io.smallrye.reactive.messaging.kafka.IncomingKafkaRecord;
 import io.vertx.core.json.JsonObject;
 import org.eclipse.microprofile.reactive.messaging.Acknowledgment;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
@@ -36,9 +40,14 @@ public class MissionCommandSource {
     @Inject
     EventSink eventSink;
 
+    @Inject
+    Tracer tracer;
+
     @Incoming("mission-command")
     @Acknowledgment(Acknowledgment.Strategy.MANUAL)
     public Uni<CompletionStage<Void>> process(Message<String> missionCommandMessage) {
+
+        Span span = TracingKafkaUtils.buildChildSpan("createMissionCommand", (IncomingKafkaRecord<String, String>)missionCommandMessage, tracer);
 
         return Uni.createFrom().item(missionCommandMessage)
                 .onItem().transform(mcm -> accept(missionCommandMessage.getPayload()))
@@ -47,8 +56,14 @@ public class MissionCommandSource {
                 .onItem().transformToUni(this::addRoute)
                 .onItem().transformToUni(this::addToRepositoryAsync)
                 .onItem().transformToUni(this::publishMissionStartedEventAsync)
-                .onItem().transform(m -> missionCommandMessage.ack())
-                .onFailure().recoverWithItem(t -> missionCommandMessage.ack());
+                .onItem().transform(m -> {
+                    span.finish();
+                    return missionCommandMessage.ack();
+                })
+                .onFailure().recoverWithItem(t -> {
+                    span.finish();
+                    return missionCommandMessage.ack();
+                });
     }
 
     private Uni<Mission> addRoute(Mission mission) {
@@ -93,6 +108,8 @@ public class MissionCommandSource {
                     .filter(m -> m.getDestinationLat() != null && m.getDestinationLong() != null);
             if (mission.isEmpty()) {
                 log.warn("Missing data in Mission object. Ignoring.");
+            } else if (tracer.activeSpan() != null) {
+                tracer.activeSpan().setTag("responderId", mission.get().getResponderId()).setTag("incidentId", mission.get().getIncidentId());
             }
             return mission;
         } catch (Exception e) {

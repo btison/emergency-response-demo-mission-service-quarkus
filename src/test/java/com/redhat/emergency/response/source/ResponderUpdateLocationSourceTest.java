@@ -74,7 +74,7 @@ public class ResponderUpdateLocationSourceTest {
         when(repository.get("5d9b2d3a-136f-414f-96ba-1b2a445fee5d:64")).thenReturn(Optional.of(mission));
         when(repository.add(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
 
-        MessageWithAck<String> message = MessageWithAck.of(payload);
+        MessageWithAck<String, String> message = MessageWithAck.of("key", payload);
         source.send(message);
 
         assertThat(message.acked(), is(true));
@@ -115,7 +115,7 @@ public class ResponderUpdateLocationSourceTest {
         when(repository.add(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
         when(eventSink.missionPickedUp(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
 
-        MessageWithAck<String> message = MessageWithAck.of(payload);
+        MessageWithAck<String, String> message = MessageWithAck.of("key", payload);
         source.send(message);
 
         assertThat(message.acked(), is(true));
@@ -158,7 +158,7 @@ public class ResponderUpdateLocationSourceTest {
         when(eventSink.responderCommand(any(Mission.class), any(BigDecimal.class), any(BigDecimal.class), any(Boolean.class)))
                 .thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
 
-        MessageWithAck<String> message = MessageWithAck.of(payload);
+        MessageWithAck<String, String> message = MessageWithAck.of("key", payload);
         source.send(message);
 
         assertThat(message.acked(), is(true));
@@ -186,7 +186,7 @@ public class ResponderUpdateLocationSourceTest {
                 "  \"continue\": true\n" +
                 "}";
 
-        MessageWithAck<String> message = MessageWithAck.of(payload);
+        MessageWithAck<String, String> message = MessageWithAck.of("key", payload);
         source.send(message);
 
         assertThat(message.acked(), is(true));

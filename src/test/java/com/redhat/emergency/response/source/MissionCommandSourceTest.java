@@ -37,6 +37,9 @@ import org.mockito.Captor;
 @QuarkusTest
 public class MissionCommandSourceTest {
 
+    @Inject
+    MissionCommandSource missionCommandSource;
+
     @InjectMock
     RoutePlanner routePlanner;
 
@@ -80,7 +83,7 @@ public class MissionCommandSourceTest {
         when(repository.add(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
         when(eventSink.missionStarted(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
 
-        MessageWithAck<String> message = MessageWithAck.of(payload);
+        MessageWithAck<String, String> message = MessageWithAck.of("key", payload);
         source.send(message);
 
         assertThat(message.acked(), is(true));
@@ -134,7 +137,7 @@ public class MissionCommandSourceTest {
                 + "\"responderStartLong\":\"-80.98765\",\"incidentLat\":\"30.12345\",\"incidentLong\":\"-70.98765\","
                 + "\"destinationLat\":\"50.12345\",\"destinationLong\":\"-90.98765\",\"processId\":\"0\"}}";
 
-        MessageWithAck<String> message = MessageWithAck.of(payload);
+        MessageWithAck<String, String> message = MessageWithAck.of("key", payload);
         source.send(message);
 
         assertThat(message.acked(), is(true));
@@ -152,7 +155,7 @@ public class MissionCommandSourceTest {
                 + "\"incidentLat\":\"30.12345\",\"incidentLong\":\"-70.98765\","
                 + "\"destinationLat\":\"50.12345\",\"destinationLong\":\"-90.98765\",\"processId\":\"0\"}}";
 
-        MessageWithAck<String> message = MessageWithAck.of(payload);
+        MessageWithAck<String, String> message = MessageWithAck.of("key", payload);
         source.send(message);
 
         assertThat(message.acked(), is(true));
@@ -160,4 +163,5 @@ public class MissionCommandSourceTest {
         verify(routePlanner, never()).getDirections(any(Location.class), any(Location.class), any(Location.class));
         verify(eventSink, never()).missionStarted(any(Mission.class));
     }
+
 }

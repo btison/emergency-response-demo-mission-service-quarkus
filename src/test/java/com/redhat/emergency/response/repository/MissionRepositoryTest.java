@@ -12,7 +12,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.MockitoAnnotations.initMocks;
+import static org.mockito.MockitoAnnotations.openMocks;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.redhat.emergency.response.model.Mission;
+import io.opentracing.noop.NoopTracerFactory;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import org.infinispan.client.hotrod.RemoteCache;
@@ -54,10 +55,11 @@ public class MissionRepositoryTest {
 
     @BeforeEach
     void init() {
-        initMocks(this);
+        openMocks(this);
         repository = new MissionRepository();
         setField(repository, "cacheName", "mission");
         setField(repository, "cacheManager", cacheManager);
+        setField(repository, "tracer", NoopTracerFactory.create());
         when(cacheManager.administration()).thenReturn(cacheManagerAdmin);
         when(cacheManagerAdmin.<String, String>getOrCreateCache(eq("mission"), any(Configuration.class))).thenReturn(missionCache);
     }

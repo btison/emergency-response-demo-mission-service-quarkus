@@ -9,6 +9,9 @@ import javax.enterprise.event.Observes;
 import javax.inject.Inject;
 
 import com.redhat.emergency.response.model.Mission;
+import io.opentracing.Span;
+import io.opentracing.Tracer;
+import io.opentracing.tag.Tags;
 import io.quarkus.runtime.StartupEvent;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.infrastructure.Infrastructure;
@@ -34,6 +37,9 @@ public class MissionRepository {
     @Inject
     RemoteCacheManager cacheManager;
 
+    @Inject
+    Tracer tracer;
+
     volatile RemoteCache<String, String> missionCache;
 
     void onStart(@Observes StartupEvent e) {
@@ -46,25 +52,36 @@ public class MissionRepository {
 
     // todo: error handling
     public Uni<Void> add(Mission mission) {
-
-       return Uni.createFrom().<Void>item(() -> {
-            getCache().put(mission.getKey(), mission.toJson());
+        Span span = tracer.buildSpan("repositoryAdd").asChildOf(tracer.activeSpan()).withTag(Tags.PEER_SERVICE.getKey(), "datagrid")
+                .withTag("cache", cacheName).withTag("key", mission.getKey()).start();
+        return Uni.createFrom().<Void>item(() -> {
+            try {
+                getCache().put(mission.getKey(), mission.toJson());
+            } finally {
+                span.finish();
+            }
             return null;
         }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
 
     public Optional<Mission> get(String key) {
-        String s =  getCache().get(key);
-        if (s == null) {
-            return Optional.empty();
-        } else {
-            try {
-                Mission mission = Json.decodeValue(s, Mission.class);
-                return Optional.of(mission);
-            } catch (DecodeException e) {
-                log.error("Exception decoding mission with id = " + key, e);
+        Span span = tracer.buildSpan("repositoryGet").asChildOf(tracer.activeSpan()).withTag(Tags.PEER_SERVICE.getKey(), "datagrid")
+                .withTag("cache", cacheName).withTag("key", key).start();
+        try {
+            String s = getCache().get(key);
+            if (s == null) {
                 return Optional.empty();
+            } else {
+                try {
+                    Mission mission = Json.decodeValue(s, Mission.class);
+                    return Optional.of(mission);
+                } catch (DecodeException e) {
+                    log.error("Exception decoding mission with id = " + key, e);
+                    return Optional.empty();
+                }
             }
+        } finally {
+            span.finish();
         }
     }
 
