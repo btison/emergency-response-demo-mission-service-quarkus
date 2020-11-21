@@ -70,11 +70,9 @@ public class RestApiTest {
 
         when(repository.clear()).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
 
-        RestAssured.given().header(new Header("Accept", "application/json")).get("/api/missions/clear").then()
+        RestAssured.given().header(new Header("Accept", "application/json")).post("/api/missions/clear").then()
                 .assertThat()
-                .statusCode(201)
-                .contentType("application/json")
-                .body("result", equalTo("completed"));
+                .statusCode(204);
 
         verify(repository).clear();
 
