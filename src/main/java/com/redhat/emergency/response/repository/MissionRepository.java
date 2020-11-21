@@ -53,19 +53,22 @@ public class MissionRepository {
         }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
 
-    public Optional<Mission> get(String key) {
-        String s =  getCache().get(key);
-        if (s == null) {
-            return Optional.empty();
-        } else {
+    public Uni<Optional<Mission>> get(String key) {
+
+        return Uni.createFrom().<Optional<Mission>>item(() -> {
             try {
-                Mission mission = Json.decodeValue(s, Mission.class);
-                return Optional.of(mission);
-            } catch (DecodeException e) {
-                log.error("Exception decoding mission with id = " + key, e);
+                String s = getCache().get(key);
+                if (s == null) {
+                    return Optional.empty();
+                } else {
+                    Mission mission = Json.decodeValue(s, Mission.class);
+                    return Optional.of(mission);
+                }
+            } catch (Exception e) {
+                log.error("Error when retrieving mission with id '" + key + "'.", e);
                 return Optional.empty();
             }
-        }
+        }).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
     }
 
     public Uni<List<Mission>> getAll() {

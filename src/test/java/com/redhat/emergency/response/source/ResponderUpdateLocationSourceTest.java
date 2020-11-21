@@ -23,6 +23,7 @@ import io.quarkus.test.junit.mockito.InjectMock;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.reactive.messaging.connectors.InMemoryConnector;
 import io.smallrye.reactive.messaging.connectors.InMemorySource;
+
 import io.vertx.core.json.Json;
 import org.eclipse.microprofile.reactive.messaging.Message;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,7 +50,7 @@ public class ResponderUpdateLocationSourceTest {
     }
 
     @Test
-    void testProcessMessage() {
+    void testProcessMessageMoving() {
 
         String payload = "{\n" +
                 "  \"responderId\": \"64\",\n" +
@@ -71,7 +72,7 @@ public class ResponderUpdateLocationSourceTest {
 
         Mission mission = Json.decodeValue(m, Mission.class);
 
-        when(repository.get("5d9b2d3a-136f-414f-96ba-1b2a445fee5d:64")).thenReturn(Optional.of(mission));
+        when(repository.get("5d9b2d3a-136f-414f-96ba-1b2a445fee5d:64")).thenReturn(Uni.createFrom().item(Optional.of(mission)));
         when(repository.add(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
 
         MessageWithAck<String> message = MessageWithAck.of(payload);
@@ -111,7 +112,7 @@ public class ResponderUpdateLocationSourceTest {
                 "\"steps\":[],\"status\":\"CREATED\"}";
         Mission mission = Json.decodeValue(m, Mission.class);
 
-        when(repository.get("5d9b2d3a-136f-414f-96ba-1b2a445fee5d:64")).thenReturn(Optional.of(mission));
+        when(repository.get("5d9b2d3a-136f-414f-96ba-1b2a445fee5d:64")).thenReturn(Uni.createFrom().item(Optional.of(mission)));
         when(repository.add(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
         when(eventSink.missionPickedUp(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
 
@@ -152,7 +153,7 @@ public class ResponderUpdateLocationSourceTest {
                 "\"steps\":[],\"status\":\"CREATED\"}";
         Mission mission = Json.decodeValue(m, Mission.class);
 
-        when(repository.get("5d9b2d3a-136f-414f-96ba-1b2a445fee5d:64")).thenReturn(Optional.of(mission));
+        when(repository.get("5d9b2d3a-136f-414f-96ba-1b2a445fee5d:64")).thenReturn(Uni.createFrom().item(Optional.of(mission)));
         when(repository.add(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
         when(eventSink.missionCompleted(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
         when(eventSink.responderCommand(any(Mission.class), any(BigDecimal.class), any(BigDecimal.class), any(Boolean.class)))
@@ -196,4 +197,57 @@ public class ResponderUpdateLocationSourceTest {
         verify(repository, never()).add(any());
     }
 
+    @Test
+    void testProcessMessageMissionNotFoundInCache() {
+
+        String payload = "{\n" +
+                "    \"responderId\": \"responder\",\n" +
+                "    \"missionId\": \"mission\",\n" +
+                "    \"incidentId\": \"incident\",\n" +
+                "    \"status\": \"MOVING\",\n" +
+                "    \"lat\": 30.12345,\n" +
+                "    \"lon\": -78.98765,\n" +
+                "    \"human\": false,\n" +
+                "    \"continue\": true\n" +
+                "}";
+
+        when(repository.get("incident:responder")).thenReturn(Uni.createFrom().item(Optional.empty()));
+        when(repository.add(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
+
+        MessageWithAck<String> message = MessageWithAck.of(payload, "topic", 10, 20);
+        source.send(message);
+
+        verify(repository).get("incident:responder");
+        verify(eventSink, never()).missionPickedUp(any());
+        verify(eventSink, never()).missionCompleted(any());
+        verify(repository, never()).add(any(Mission.class));
+        assertThat(message.acked(), is(true));
+    }
+
+    @Test
+    void testProcessMessageGetMissionThrowsException() {
+
+        String payload = "{\n" +
+                "    \"responderId\": \"responder\",\n" +
+                "    \"missionId\": \"mission\",\n" +
+                "    \"incidentId\": \"incident\",\n" +
+                "    \"status\": \"MOVING\",\n" +
+                "    \"lat\": 30.12345,\n" +
+                "    \"lon\": -78.98765,\n" +
+                "    \"human\": false,\n" +
+                "    \"continue\": true\n" +
+                "}";
+
+        when(repository.get("incident:responder")).thenThrow(new RuntimeException("Exception!"));
+        when(repository.add(any(Mission.class))).thenReturn(Uni.createFrom().emitter(emitter -> emitter.complete(null)));
+
+        MessageWithAck<String> message = MessageWithAck.of(payload, "topic", 10, 20);
+        source.send(message);
+
+        verify(repository).get("incident:responder");
+        verify(eventSink, never()).missionPickedUp(any());
+        verify(eventSink, never()).missionCompleted(any());
+        verify(repository, never()).add(any(Mission.class));
+        assertThat(message.acked(), is(true));
+    }
 }

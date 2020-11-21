@@ -111,7 +111,7 @@ public class MissionRepositoryTest {
 
         when(missionCache.get("key")).thenReturn(json.toString());
 
-        Optional<Mission> mission = repository.get("key");
+        Optional<Mission> mission = repository.get("key").await().indefinitely();
         assertThat(mission, notNullValue());
         assertThat(mission.isPresent(), equalTo(true));
         assertThat(mission.get().getIncidentId(), equalTo("incident123"));
@@ -133,7 +133,18 @@ public class MissionRepositoryTest {
 
         when(missionCache.get("key")).thenReturn(null);
 
-        Optional<Mission> mission = repository.get("key");
+        Optional<Mission> mission = repository.get("key").await().indefinitely();
+        assertThat(mission, notNullValue());
+        assertThat(mission.isPresent(), is(false));
+        verify(missionCache).get("key");
+    }
+
+    @Test
+    void testGetThrowsException() {
+
+        when(missionCache.get("key")).thenThrow(new RuntimeException("Exception!"));
+
+        Optional<Mission> mission = repository.get("key").await().indefinitely();
         assertThat(mission, notNullValue());
         assertThat(mission.isPresent(), is(false));
         verify(missionCache).get("key");
