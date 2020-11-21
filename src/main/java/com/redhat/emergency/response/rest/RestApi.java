@@ -21,10 +21,10 @@ public class RestApi {
                 .setStatusCode(200).end(Json.encode(missions)));
     }
 
-    @Route(path = "/api/missions/clear", methods = HttpMethod.GET, produces = "application/json")
+    @Route(path = "/api/missions/clear", methods = HttpMethod.POST, produces = "application/json")
     void clearAll(RoutingExchange ex) {
         repository.clear().subscribe().with(v -> ex.response().putHeader("Content-Type", "application/json")
-                .setStatusCode(201).end("{\"result\":\"completed\"}"));
+                .setStatusCode(204).end());
     }
 
     @Route(path = "/api/missions/responders/:id", methods = HttpMethod.GET, produces = "application/json")
